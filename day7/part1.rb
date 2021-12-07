@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+
+# input = ["16,1,2,0,4,2,7,1,2,14\n"]
+input = File.readlines('input.txt')
+
+input = input.first.chomp.split(',').map(&:to_i)
+
+fuel_costs = Array.new(input.max)
+
+(input.min..input.max).each do |position|
+  fuel_costs[position] = input.reduce(0) do |sum, n|
+    cost = n - position
+    cost = -cost if cost.negative?
+    sum + cost
+  end
+end
+
+puts "Minimum cost #{fuel_costs.min} at position #{fuel_costs.index(fuel_costs.min)}"
