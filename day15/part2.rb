@@ -7,37 +7,24 @@ INFINITY = (2**(0.size * 8 -2) -1)
 
 class Vertex
   attr_reader :row, :col, :risk
-  attr_accessor :distance
+  attr_accessor :g_score, :f_score
 
   def initialize(row:, col:, risk:)
     @row = row
     @col = col
     @risk = risk
 
-    self.distance = row.zero? && col.zero? ? 0 : INFINITY
-
-    unvisit
-  end
-
-  def unvisited?
-    !@visited
-  end
-
-  def unvisit
-    @visited = false
-  end
-
-  def visit
-    @visited = true
+    self.g_score = row.zero? && col.zero? ? 0 : INFINITY
+    self.f_score = row.zero? && col.zero? ? risk : INFINITY
   end
 
   def <=>(other_vertex)
-    distance <=> other_vertex.distance
+    f_score <=> other_vertex.f_score
   end
 end
 
 class CaveMap
-  attr_accessor :grid, :unvisited_set
+  attr_accessor :grid, :open_set, :came_from, :start, :finish
 
   def initialize(input:)
     initial_grid = Matrix[*input.map { |line| line.chomp.split('').map(&:to_i) }]
@@ -45,24 +32,34 @@ class CaveMap
     grande_row = Matrix.hstack(*generate_partial_grids(initial_grid))
     self.grid = Matrix.vstack(*generate_partial_grids(grande_row))
 
-    self.unvisited_set = SortedSet.new
-
     grid.each_with_index do |risk, row, col|
       grid[row, col] = Vertex.new(row: row, col: col, risk: risk)
-      unvisited_set << grid[row, col]
     end
+
+    self.start = grid[0, 0]
+    self.finish = grid[grid.row_count - 1, grid.column_count - 1]
+
+    self.open_set = SortedSet.new([start])
+    self.came_from = {}
   end
 
   def compute_risk
     while (current = pop_next_vertex) && !finish?(current)
+      open_set.delete(current)
+
       unvisited_neighbors(current).each do |neighbor|
-        new_distance = current.distance + neighbor.risk
-        neighbor.distance = new_distance if new_distance < neighbor.distance
+        tentative_g_score = current.g_score + neighbor.risk
+        next unless tentative_g_score < neighbor.g_score
+
+        came_from[neighbor] = current
+        neighbor.g_score = tentative_g_score
+        neighbor.f_score = tentative_g_score + neighbor.risk
+
+        open_set.add(neighbor)
       end
-      current.visit
     end
 
-    grid[grid.row_count - 1, grid.column_count - 1].distance
+    current.g_score
   end
 
   private
@@ -83,14 +80,24 @@ class CaveMap
   end
 
   def pop_next_vertex
-    vertex = unvisited_set.first
-    unvisited_set.delete(vertex)
+    vertex = open_set.first
+    open_set.delete(vertex)
     vertex
   end
 
+  def reconstruct_path(current)
+    total_path = [current]
+
+    while came_from.key?(current)
+      current = came_from[current]
+      total_path.prepend(current)
+    end
+
+    total_path
+  end
+
   def finish?(vertex)
-    vertex.row == grid.row_count - 1 &&
-      vertex.col == grid.column_count - 1
+    vertex == finish
   end
 
   def unvisited_neighbors(vertex)
@@ -103,7 +110,7 @@ class CaveMap
     neighbors << grid[row, col - 1] unless col.zero?
     neighbors << grid[row, col + 1] unless col + 1 == grid.column_count
 
-    neighbors.select(&:unvisited?)
+    neighbors
   end
 
 end
